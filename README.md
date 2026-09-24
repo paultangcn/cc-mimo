@@ -1,74 +1,106 @@
-# claudex
+# cc-mimo
 
-Run [Claude Code](https://code.claude.com) on non-Anthropic models (Grok, GPT, Xiaomi MiMo, …) through [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) — with subagents, web search and multi-step tool use actually working.
+Use [Claude Code](https://code.claude.com) with **Xiaomi MiMo** — no Anthropic subscription needed — with subagents, web search, task lists and long multi-step tool use actually working.
 
 [中文说明](README.zh-CN.md)
 
-Pointing `ANTHROPIC_BASE_URL` at a gateway gets you a chat that runs. Using it as a coding agent is where things break: subagents fail, web search does nothing, some models slow to a crawl after a few steps. claudex is the set of fixes for that: a small pass-through layer (`claudex-shim`), a few gateway settings, and a launcher.
-
+```bash
+ccmimo              # MiMo v2.6 Pro
+ccmimo flash        # MiMo v2.6 Flash
+ccmimo grok-4.7     # any other model your gateway serves
+ccmimo flash --resume
 ```
-Claude Code ──► claudex-shim :8319 ──► CLIProxyAPI :8317 ──► xAI / OpenAI / MiMo / …
-                  │
-                  └─ native web search ──► provider (e.g. MiMo) directly
-```
 
-## What breaks, and what fixes it
+cc-mimo only affects sessions started with `ccmimo`. Your regular `claude` sessions, settings and subscription (if you have one) are untouched.
+
+## Why
+
+Pointing Claude Code at MiMo through a gateway gets you a chat. Using it as a coding agent is where it breaks. cc-mimo is the set of fixes:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Every subagent / Explore agent dies with `400 unknown provider for model claude-sonnet-5` (or haiku/opus) | Subagents and helpers request Claude models; the gateway serves none | **shim** rewrites them to the model the session's main thread uses — a Grok session spawns Grok subagents, a MiMo session spawns MiMo. Unknown session → the request is refused, never silently routed to another model |
-| `WebSearch` returns nothing, or a literal `<tool_call><function=web_search>…` string | `web_search_*` is an Anthropic server-side tool; the gateway forwards it as a plain function the model can't execute | **shim** runs the search on the provider's own web search (MiMo's `{"type":"web_search"}` plugin) and returns the citations as real search results, so source links show up |
-| MiMo gets slower every step: thinking grows 1k → 50k characters, one step takes 3–6 minutes, the screen doesn't move for half an hour | CLIProxyAPI drops unsigned thinking blocks when converting Claude → OpenAI, so the model never gets its previous `reasoning_content` back and re-derives everything each step | **gateway**: `is-compat: true` on the model (see [`examples/cliproxyapi-snippet.yaml`](examples/cliproxyapi-snippet.yaml)). Steps drop back to seconds |
-| `"grok-4.7" isn't described by this version's model catalog … keeps this session within 200k tokens` | Claude Code doesn't know the model's window | **launcher**: `CLAUDE_CODE_MAX_CONTEXT_TOKENS` + `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` |
-| The model says it has no `TaskCreate` / `TaskList` / `TaskUpdate` | Claude Code only enables the task tools for models it recognizes | **launcher**: `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` |
-| Cross-session `SendMessage` fails with `structured messages cannot be sent cross-session` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` makes SendMessage accept objects; some models then send `{"type":"shutdown_request"}` | **launcher**: don't set that flag (and don't `--resume` a session whose history already contains the bad calls) |
+| MiMo gets slower every step: thinking grows from ~1k to 50k characters, a single step takes 3–6 minutes | The gateway drops MiMo's previous reasoning when converting requests, so it re-derives everything each step (MiMo requires `reasoning_content` to be sent back during tool use) | `is-compat: true` on the MiMo models in CLIProxyAPI |
+| `WebSearch` returns nothing, or a literal `<tool_call><function=web_search>…` string | Claude Code's web search is an Anthropic server-side tool; MiMo can't execute it | **cc-mimo-shim** runs the search on MiMo's native web search plugin and returns the sources as real search results, with links |
+| Every subagent dies with `400 unknown provider for model claude-…` | Something asked for a Claude model the gateway doesn't have | Subagents follow the session's model (Claude Code's own default, enforced by `ccmimo`); other models are called **by name** through agents; the shim maps any leftover Claude model name back to the session's model |
+| The model says it has no `TaskCreate` / `TaskList` | Claude Code hides task tools for models it doesn't recognize | `ccmimo` turns them on |
+| `… isn't described by this version's model catalog … within 200k tokens` | Claude Code doesn't know the model's context window | `ccmimo` sets 500k, auto-compact at 90% (configurable) |
+| Cross-session `SendMessage` fails (`structured messages cannot be sent cross-session`) | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` lets models send objects instead of text | `ccmimo` unsets it. Don't `--resume` a session whose history already contains the bad calls |
 
-Everything else passes through byte for byte.
+```
+claude (via ccmimo) ──► cc-mimo-shim :8319 ──► CLIProxyAPI :8317 ──► MiMo / Grok / GPT / …
+                          └─ web search ──► MiMo native web search
+```
+
+## What you get without a Claude subscription
+
+Everything in Claude Code that doesn't need a claude.ai login: reading/editing files, shell, subagents (Explore, Plan, general-purpose, your own), web search and fetch, images, task lists, plan mode, questions, skills, workflows, scheduled/background work, cross-session messages, worktrees.
+
+Not available (they need a claude.ai login): claude.ai connectors, Remote Control, publishing Artifacts.
 
 ## Requirements
 
 - Claude Code (tested with 2.1.281)
-- CLIProxyAPI with your providers configured (tested with 7.2.145)
-- Node.js 18+ (no npm dependencies)
-- macOS for the bundled service installer; on Linux run `node shim/server.js` under systemd or similar
+- [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) with your MiMo key (tested with 7.2.145). Required: MiMo's own Anthropic-compatible endpoint did not work reliably with Claude Code in our use.
+- Node.js 18+ (no npm dependencies), `jq` for the smoke test
+- macOS for the bundled installer; on Linux run `node shim/server.js` under systemd and put `bin/ccmimo` on your PATH
 
 ## Setup
 
-1. **Gateway.** Merge the relevant parts of [`examples/cliproxyapi-snippet.yaml`](examples/cliproxyapi-snippet.yaml) into your CLIProxyAPI config — at minimum `is-compat: true` for MiMo models.
-2. **Shim config.** Copy [`examples/shim.json`](examples/shim.json) to `~/.config/claudex/shim.json` and set `upstreamApiKey` to a client key your CLIProxyAPI accepts. For native search, either point `fromCliProxyAPI` at your CLIProxyAPI config and provider name (the key stays in one place), or give `baseUrl` + `apiKey` / `apiKeyEnv` directly.
-3. **Service.** `scripts/install-macos.sh` — runs the shim at login and restarts it if it dies. Logs: `~/Library/Logs/claudex-shim.log`. Uninstall: `scripts/install-macos.sh --uninstall`.
-4. **Launcher.** Add the `claudex` function from [`examples/claudex.zsh`](examples/claudex.zsh) to your shell rc. Switch models inside with `/model`.
-5. **Check.** `ANTHROPIC_AUTH_TOKEN=<client key> scripts/smoke-test.sh <model>` runs a coding task, a subagent and a web search headlessly:
+1. **CLIProxyAPI.** Add MiMo as in [`examples/cliproxyapi-snippet.yaml`](examples/cliproxyapi-snippet.yaml) — keep `is-compat: true` on both models.
+2. **Install.** `scripts/install-macos.sh` — first run creates `~/.config/cc-mimo/config.sh` and `~/.config/cc-mimo/shim.json`; fill in your CLIProxyAPI client key and run it again. It installs the shim as a login service (log: `~/Library/Logs/cc-mimo-shim.log`) and links `ccmimo` into `~/.local/bin`.
+3. **Check.** `scripts/smoke-test.sh` (optionally with a model, e.g. `scripts/smoke-test.sh flash`):
 
 ```
-== mimo-v2.6-pro
 PASS  coding  [ 2 Bash  1 Edit  2 Read ]
-PASS  subagent  [ 1 Agent  4 Bash  1 Read ]
+PASS  subagent  [ 1 Agent(general-purpose)  3 Bash  1 Read ]
+PASS  named  [ 1 Agent(mimo-flash) ]
+PASS  tasks  [ 2 TaskCreate  1 TaskList ]
 PASS  search  [ 1 WebSearch ]
 ```
 
-## Shim config reference
+Uninstall: `scripts/install-macos.sh --uninstall`.
 
-| Key | Default | Meaning |
+## Models and agents
+
+**Layer 1 — MiMo.** `ccmimo` starts on `mimo-v2.6-pro`; `ccmimo flash` on `mimo-v2.6-flash`. Subagents run on the session's model unless the model hands work to a specific one by name: `mimo-pro` and `mimo-flash` are available as agents in every `ccmimo` session (e.g. a Pro session can give quick lookups to `mimo-flash`).
+
+**Layer 2 — other models (example: Grok).**
+1. Make CLIProxyAPI serve it (API key or one of its OAuth logins) — see the `xai` block in the snippet.
+2. It already works as `ccmimo grok-4.7`. To add a shortcut and let other sessions call it by name, edit `~/.config/cc-mimo/config.sh`:
+
+```bash
+CCMIMO_SHORTCUTS="pro=mimo-v2.6-pro flash=mimo-v2.6-flash grok=grok-4.7"
+CCMIMO_AGENTS="mimo-pro=mimo-v2.6-pro mimo-flash=mimo-v2.6-flash grok=grok-4.7"
+```
+
+Web search for non-MiMo models goes through CLIProxyAPI as usual.
+
+## Configuration
+
+`~/.config/cc-mimo/config.sh` (read by `ccmimo`, see [`examples/config.sh`](examples/config.sh)):
+
+| Variable | Default | |
 |---|---|---|
-| `listen.host` / `listen.port` | `127.0.0.1` / `8319` | Where Claude Code connects (`ANTHROPIC_BASE_URL`) |
-| `upstream` | `http://127.0.0.1:8317` | Your CLIProxyAPI |
-| `upstreamApiKey` | — | Client key used to list the gateway's models |
-| `stateFile` | `~/.local/state/claudex/session-models.json` | Remembers each session's model across shim restarts |
-| `nativeWebSearch[]` | `[]` | `models` (regex on the real model name) + endpoint: `fromCliProxyAPI: {config, provider}` or `baseUrl` + `apiKey`/`apiKeyEnv`. The endpoint must accept OpenAI-style `tools: [{"type":"web_search"}]` and return `message.annotations[].url_citation` (MiMo does) |
+| `CCMIMO_API_KEY` | — | Client key your CLIProxyAPI accepts |
+| `CCMIMO_GATEWAY_URL` | `http://127.0.0.1:8319` | cc-mimo-shim |
+| `CCMIMO_DEFAULT_MODEL` | `mimo-v2.6-pro` | |
+| `CCMIMO_SHORTCUTS` | `pro=… flash=…` | `ccmimo <shortcut>` |
+| `CCMIMO_AGENTS` | `mimo-pro=… mimo-flash=…` | Agents callable by name, `name=model` |
+| `CCMIMO_CONTEXT_TOKENS` / `CCMIMO_COMPACT_PCT` | `500000` / `90` | |
+| `CCMIMO_CLAUDE_ARGS` | empty | Extra `claude` flags, e.g. `--dangerously-skip-permissions` |
 
-The config path can be overridden with `CLAUDEX_SHIM_CONFIG`.
+`~/.config/cc-mimo/shim.json` (read by the shim, see [`examples/shim.json`](examples/shim.json)): listen port, CLIProxyAPI address and client key, and where the native web search goes — `fromCliProxyAPI` reuses the MiMo key from your CLIProxyAPI config so it lives in one place, or set `baseUrl` + `apiKey`/`apiKeyEnv`.
 
-## How it works
+## How the shim works
 
-- **Session model.** Claude Code sends `x-claude-code-session-id` on every request and `x-claude-code-agent-id` on subagent requests. The shim records the model of each session's main-thread requests and uses it for that session's `claude-*` requests. Model ids the gateway itself serves (CLIProxyAPI's `claude-…-dd-…` discovery aliases) are left alone.
-- **Search.** A request carrying a `web_search_*` tool for a matching model is answered by the shim: one OpenAI-style call with the provider's web search tool, converted into `server_tool_use` + `web_search_tool_result` + text blocks (streamed or not).
-- **Log.** One line per request: model, main/subagent, server tools, effort; plus every model rewrite and search. When something misbehaves, the log tells you which layer.
+- **Web search.** A request carrying Claude Code's `web_search_*` tool for a MiMo model is answered by the shim: one call to MiMo with `tools: [{"type":"web_search"}]`, its `url_citation` annotations turned into `web_search_tool_result` blocks (streamed or not).
+- **Claude model names.** A request for a `claude-*` model the gateway doesn't serve is sent with the model the same session's main thread is using (Claude Code's `x-claude-code-session-id` header; remembered across restarts). If the session is unknown, the request is refused — never silently routed to a different model. Models the gateway does serve, including CLIProxyAPI's `claude-…` discovery aliases, pass through untouched.
+- **Everything else** is forwarded byte for byte. One log line per request (model, main/subagent, server tools, effort) so you can see which layer misbehaves.
 
 ## Caveats
 
 - Relies on Claude Code request headers that are not a documented API; a Claude Code update may need a shim update.
-- Model quality is the model's. The shim fixes plumbing, not judgment (e.g. a model searching for last year's edition of something).
+- The shim fixes plumbing, not judgment: model quality is the model's.
 
 ## License
 

@@ -1,4 +1,4 @@
-# Parts of a CLIProxyAPI config that matter for claudex. Merge into your own config;
+# Parts of a CLIProxyAPI config that matter for cc-mimo. Merge into your own config;
 # CLIProxyAPI hot-reloads it.
 
 openai-compatibility:
@@ -22,9 +22,19 @@ openai-compatibility:
         thinking:
           levels: ["low", "medium", "high"]
 
-# Optional fallback for clients that bypass claudex-shim: map Claude Code's web_search
+  # Adding another model (example: Grok via an xAI API key). Any model CLIProxyAPI
+  # serves works the same way, including ones from its OAuth logins.
+  - name: "xai"
+    base-url: "https://api.x.ai/v1"
+    api-key-entries:
+      - api-key: "xai-your-key"
+    models:
+      - name: "grok-4.7"
+        alias: "grok-4.7"
+
+# Optional fallback for clients that bypass cc-mimo-shim: map Claude Code's web_search
 # server tool to MiMo's native web search. Works, but returns no source links;
-# claudex-shim handles search itself and does return them.
+# cc-mimo-shim handles search itself and does return them.
 payload:
   override-raw:
     - models:

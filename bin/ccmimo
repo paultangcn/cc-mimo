@@ -1,0 +1,59 @@
+#!/bin/bash
+# ccmimo — Claude Code on Xiaomi MiMo (and any other model your CLIProxyAPI serves).
+#
+#   ccmimo                  start on the default model (mimo-v2.6-pro)
+#   ccmimo flash            start on a shortcut (see CCMIMO_SHORTCUTS)
+#   ccmimo grok-4.7         start on any model id your gateway serves
+#   ccmimo flash --resume   anything after the model goes to `claude` unchanged
+#
+# Everything here is scoped to this launch: your regular `claude` sessions, settings
+# and subscription are not touched.
+set -euo pipefail
+
+CONFIG="${CCMIMO_CONFIG:-$HOME/.config/cc-mimo/config.sh}"
+[ -f "$CONFIG" ] && . "$CONFIG"
+
+: "${CCMIMO_GATEWAY_URL:=http://127.0.0.1:8319}"      # cc-mimo-shim (in front of CLIProxyAPI)
+: "${CCMIMO_API_KEY:?set CCMIMO_API_KEY (a client key your CLIProxyAPI accepts) in $CONFIG}"
+: "${CCMIMO_DEFAULT_MODEL:=mimo-v2.6-pro}"
+: "${CCMIMO_SHORTCUTS:=pro=mimo-v2.6-pro flash=mimo-v2.6-flash}"
+# Agents the model can call by name to hand work to a specific model: "name=model ..."
+: "${CCMIMO_AGENTS:=mimo-pro=mimo-v2.6-pro mimo-flash=mimo-v2.6-flash}"
+: "${CCMIMO_CONTEXT_TOKENS:=500000}"
+: "${CCMIMO_COMPACT_PCT:=90}"
+: "${CCMIMO_CLAUDE_ARGS:=}"                            # e.g. --dangerously-skip-permissions
+
+model="$CCMIMO_DEFAULT_MODEL"
+if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+  model="$1"; shift
+  for pair in $CCMIMO_SHORTCUTS; do
+    [ "${pair%%=*}" = "$model" ] && model="${pair#*=}" && break
+  done
+fi
+
+agents_json=$(CCMIMO_AGENTS="$CCMIMO_AGENTS" node -e '
+  const agents = {};
+  for (const pair of (process.env.CCMIMO_AGENTS || "").split(/\s+/).filter(Boolean)) {
+    const [name, model] = pair.split("=");
+    agents[name] = {
+      description: `Worker running on ${model}. Use it to hand a subtask to ${model} specifically.`,
+      prompt: "You are a capable software engineering agent. Complete the task you are given, using tools as needed, and report the result concisely.",
+      model,
+    };
+  }
+  process.stdout.write(JSON.stringify(agents));')
+
+# Subagents follow the session's model unless one is named — Claude Code's own default,
+# restated here so a user-level CLAUDE_CODE_SUBAGENT_MODEL (e.g. a Claude model) can't leak in.
+settings_json='{"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"inherit"}}'
+
+export ANTHROPIC_BASE_URL="$CCMIMO_GATEWAY_URL"
+export ANTHROPIC_AUTH_TOKEN="$CCMIMO_API_KEY"
+export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$CCMIMO_CONTEXT_TOKENS"
+export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE="$CCMIMO_COMPACT_PCT"
+export CLAUDE_CODE_ENABLE_TODO_TOOLS=1   # TaskCreate/TaskList/TaskUpdate are hidden for models Claude Code doesn't recognize
+unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS  # breaks cross-session SendMessage for these models
+
+# shellcheck disable=SC2086
+exec claude --model "$model" --settings "$settings_json" --agents "$agents_json" $CCMIMO_CLAUDE_ARGS "$@"

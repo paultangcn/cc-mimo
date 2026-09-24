@@ -2,7 +2,7 @@
   "listen": { "host": "127.0.0.1", "port": 8319 },
   "upstream": "http://127.0.0.1:8317",
   "upstreamApiKey": "your-cliproxyapi-client-key",
-  "stateFile": "~/.local/state/claudex/session-models.json",
+  "stateFile": "~/.local/state/cc-mimo/session-models.json",
   "nativeWebSearch": [
     {
       "models": "^mimo-",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// claudex-shim: a small HTTP layer between Claude Code and an Anthropic-compatible
+// cc-mimo-shim: a small HTTP layer between Claude Code and an Anthropic-compatible
 // gateway (CLIProxyAPI) that serves non-Anthropic models.
 //
 // It fixes what breaks when Claude Code talks to such models:
@@ -24,14 +24,14 @@ const path = require('path');
 
 function expandHome(p) { return p && p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p; }
 
-const CONFIG_PATH = expandHome(process.env.CLAUDEX_SHIM_CONFIG || '~/.config/claudex/shim.json');
+const CONFIG_PATH = expandHome(process.env.CCMIMO_SHIM_CONFIG || '~/.config/cc-mimo/shim.json');
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
 const LISTEN_HOST = config.listen?.host || '127.0.0.1';
 const LISTEN_PORT = config.listen?.port || 8319;
 const UPSTREAM = new URL(config.upstream || 'http://127.0.0.1:8317');
 const UPSTREAM_KEY = config.upstreamApiKey || '';
-const STATE_FILE = expandHome(config.stateFile || '~/.local/state/claudex/session-models.json');
+const STATE_FILE = expandHome(config.stateFile || '~/.local/state/cc-mimo/session-models.json');
 const NATIVE_SEARCH = (config.nativeWebSearch || []).map((r) => ({ ...r, re: new RegExp(r.models, 'i') }));
 
 function log(...a) { console.log(new Date().toISOString(), ...a); }
@@ -242,7 +242,7 @@ async function handle(req, res, body) {
     const to = sid && sessionModel.get(sid);
     if (!to) {
       log('model', parsed.model, 'REFUSED: session model unknown', sid || 'no-session');
-      return sendError(res, 400, 'invalid_request_error', `claudex-shim: cannot tell which model this session uses, refusing to guess a replacement for ${parsed.model}`);
+      return sendError(res, 400, 'invalid_request_error', `cc-mimo-shim: cannot tell which model this session uses, refusing to guess a replacement for ${parsed.model}`);
     }
     log('model', parsed.model, '->', to, agent ? 'agent=' + agent : 'main');
     parsed.model = to;
@@ -270,7 +270,7 @@ http.createServer((req, res) => {
   req.on('data', (c) => chunks.push(c));
   req.on('end', () => handle(req, res, Buffer.concat(chunks)).catch((e) => {
     log('handler error', e.stack || e.message);
-    if (!res.headersSent) sendError(res, 500, 'api_error', 'claudex-shim internal error');
+    if (!res.headersSent) sendError(res, 500, 'api_error', 'cc-mimo-shim internal error');
     else res.end();
   }));
-}).listen(LISTEN_PORT, LISTEN_HOST, () => log(`claudex-shim listening on ${LISTEN_HOST}:${LISTEN_PORT} -> ${UPSTREAM.origin} (config ${CONFIG_PATH})`));
+}).listen(LISTEN_PORT, LISTEN_HOST, () => log(`cc-mimo-shim listening on ${LISTEN_HOST}:${LISTEN_PORT} -> ${UPSTREAM.origin} (config ${CONFIG_PATH})`));
