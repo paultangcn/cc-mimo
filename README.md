@@ -24,6 +24,7 @@ Pointing Claude Code at MiMo through a gateway gets you a chat. Using it as a co
 | Every subagent dies with `400 unknown provider for model claude-…` | Something asked for a Claude model the gateway doesn't have | Subagents follow the session's model (Claude Code's own default, enforced by `ccmimo`); other models are called **by name** through agents; the shim maps any leftover Claude model name back to the session's model |
 | The model says it has no `TaskCreate` / `TaskList` | Claude Code hides task tools for models it doesn't recognize | `ccmimo` turns them on |
 | `… isn't described by this version's model catalog … within 200k tokens` | Claude Code doesn't know the model's context window | `ccmimo` sets 500k, auto-compact at 90% (configurable) |
+| A session stops auto-compacting and grows past the limit (status bar at 100%) | It was switched via the `/model` picker to one of CLIProxyAPI's `claude-…` discovery aliases; Claude Code then ignores the context/compaction settings | `ccmimo` turns gateway model discovery off. Switch models by real name: `/model mimo-v2.6-flash` |
 | Cross-session `SendMessage` fails (`structured messages cannot be sent cross-session`) | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` lets models send objects instead of text | `ccmimo` unsets it. Don't `--resume` a session whose history already contains the bad calls |
 
 ```

@@ -49,7 +49,10 @@ settings_json='{"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"inherit"}}'
 
 export ANTHROPIC_BASE_URL="$CCMIMO_GATEWAY_URL"
 export ANTHROPIC_AUTH_TOKEN="$CCMIMO_API_KEY"
-export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
+# No gateway model discovery: CLIProxyAPI lists models under claude-… aliases, and a
+# session switched to an alias via /model ignores the context window and compaction
+# settings below (it keeps growing past them). Switch by real name: /model mimo-v2.6-flash
+unset CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$CCMIMO_CONTEXT_TOKENS"
 export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE="$CCMIMO_COMPACT_PCT"
 export CLAUDE_CODE_ENABLE_TODO_TOOLS=1   # TaskCreate/TaskList/TaskUpdate are hidden for models Claude Code doesn't recognize

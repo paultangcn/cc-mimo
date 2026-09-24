@@ -24,6 +24,7 @@ cc-mimo 只作用于用 `ccmimo` 启动的会话。你平时的 `claude` 会话�
 | 派子 agent 全部报 `400 unknown provider for model claude-…` | 有东西请求了网关里没有的 Claude 模型 | 子 agent 跟主会话用同一个模型（Claude Code 的默认规则，由 `ccmimo` 保证）；要用别的模型就**点名**对应的 agent；剩下请求 Claude 模型名的，由 shim 换回主会话的模型 |
 | 模型说自己没有 `TaskCreate` / `TaskList` | Claude Code 对它不认识的模型隐藏任务工具 | `ccmimo` 把它们打开 |
 | 提示 `… isn't described by this version's model catalog … within 200k tokens` | Claude Code 不知道模型的上下文长度 | `ccmimo` 设为 50 万，用到 90% 自动压缩（可改） |
+| 会话不再自动压缩，上下文一直涨过上限（状态栏 100%） | 用 `/model` 列表切到了 CLIProxyAPI 起的 `claude-…` 别名，Claude Code 对别名不执行我们设的上下文和压缩设置 | `ccmimo` 关掉网关模型发现；切模型用真名：`/model mimo-v2.6-flash` |
 | 跨会话 `SendMessage` 报 `structured messages cannot be sent cross-session` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 会让模型发对象而不是文字 | `ccmimo` 会去掉这个开关；也不要 `--resume` 历史里已经有错误调用的会话 |
 
 ```
