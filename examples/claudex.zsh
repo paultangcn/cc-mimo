@@ -5,6 +5,7 @@ claudex() {
   CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1 \
   CLAUDE_CODE_MAX_CONTEXT_TOKENS=500000 \
   CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=90 \
+  CLAUDE_CODE_ENABLE_TODO_TOOLS=1 \
   claude --model grok-4.7 --dangerously-skip-permissions "$@"
 }
 # Do NOT add CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1: in team mode SendMessage accepts

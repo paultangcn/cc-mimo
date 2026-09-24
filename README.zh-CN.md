@@ -20,6 +20,7 @@ Claude Code ──► claudex-shim :8319 ──► CLIProxyAPI :8317 ──► x
 | `WebSearch` 没结果，或者只回一段 `<tool_call><function=web_search>…` 文字 | `web_search_*` 是 Anthropic 服务端工具，网关把它当普通函数转给模型，模型执行不了 | **shim** 改用厂商自带的联网搜索（MiMo 的 `{"type":"web_search"}` 插件），把引用转成真正的搜索结果，来源链接能显示出来 |
 | MiMo 越走越慢：思考量从 1 千字涨到 5 万字，一步 3–6 分钟，页面半小时不动 | CLIProxyAPI 把 Claude 格式转成 OpenAI 格式时丢掉了没有签名的思考内容，模型拿不回之前的 `reasoning_content`，每一步都从头重推 | **网关**：给模型加 `is-compat: true`（见 [`examples/cliproxyapi-snippet.yaml`](examples/cliproxyapi-snippet.yaml)），每步回到几秒 |
 | 提示 `"grok-4.7" isn't described by this version's model catalog … within 200k tokens` | Claude Code 不认识模型的上下文长度 | **启动命令**：`CLAUDE_CODE_MAX_CONTEXT_TOKENS` + `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` |
+| 模型说自己没有 `TaskCreate` / `TaskList` / `TaskUpdate` | Claude Code 只对它认识的模型开放任务工具 | **启动命令**：`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` |
 | 跨会话 `SendMessage` 报 `structured messages cannot be sent cross-session` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 让 SendMessage 接受对象，有的模型就发 `{"type":"shutdown_request"}` | **启动命令**：不要设这个开关；也不要 `--resume` 历史里已经有错误调用的会话 |
 
 其他请求原样转发。
