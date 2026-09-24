@@ -11,6 +11,8 @@ ccmimo grok-4.7     # 网关里有的任何其他模型
 ccmimo flash --resume
 ```
 
+**平台**：目前只支持 Mac（已实测，有一键安装）。Linux 理论上可以手动配置，没测过。Windows 暂不支持。
+
 cc-mimo 只作用于用 `ccmimo` 启动的会话。你平时的 `claude` 会话、设置和订阅（如果有）都不受影响。
 
 ## 为什么需要

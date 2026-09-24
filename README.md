@@ -11,6 +11,8 @@ ccmimo grok-4.7     # any other model your gateway serves
 ccmimo flash --resume
 ```
 
+**Platform:** macOS only for now (tested, one-step installer). Linux should work with manual setup but is untested. Windows is not supported yet.
+
 cc-mimo only affects sessions started with `ccmimo`. Your regular `claude` sessions, settings and subscription (if you have one) are untouched.
 
 ## Why
