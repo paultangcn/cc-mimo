@@ -68,6 +68,23 @@ CCMIMO_AGENTS="mimo-pro=mimo-v2.6-pro mimo-flash=mimo-v2.6-flash grok=grok-4.7"
 
 非 MiMo 模型的联网搜索照常走 CLIProxyAPI。
 
+## 查询 MiMo 额度（可选）
+
+MiMo 没有公开的额度 API，但小米控制台网页用两个接口读额度，你可以用自己的控制台登录 cookie 调用：
+
+- `GET https://platform.xiaomimimo.com/api/v1/tokenPlan/usage`：已用 / 总额度（`data.usage.items` 里 `name=plan_total_token` 那一项）
+- `GET https://platform.xiaomimimo.com/api/v1/tokenPlan/detail`：套餐和到期时间 `currentPeriodEnd`
+
+获取 cookie 不用手动翻请求头：在浏览器里打开控制台的 Token Plan 页面，打开网页检查器的“网络”标签，刷新，把请求导出成 `.har` 文件，然后：
+
+```bash
+jq -r '[.log.entries[] | select(.request.url|test("tokenPlan/usage"))][0].request.headers[] | select(.name|test("^cookie$";"i")).value' platform.xiaomimimo.com.har > ~/.config/cc-mimo/mimo-console-cookie
+chmod 600 ~/.config/cc-mimo/mimo-console-cookie
+curl -s https://platform.xiaomimimo.com/api/v1/tokenPlan/usage -H "Cookie: $(cat ~/.config/cc-mimo/mimo-console-cookie)"
+```
+
+之后可以在 Claude Code 的 `statusLine` 脚本里显示出来（记得缓存结果，不要每次刷新都去查）。这个 cookie 就是你小米账号的登录凭证：自己保管好，用完删掉 `.har` 文件，过期后重新导出一次。这些是控制台内部接口，没有公开文档，可能会变。
+
 ## 配置
 
 `~/.config/cc-mimo/config.sh`（`ccmimo` 读取，见 [`examples/config.sh`](examples/config.sh)）：客户端 key、默认模型、简写、可点名的 agent、上下文长度和压缩比例、额外的 `claude` 参数（例如 `--dangerously-skip-permissions`）。

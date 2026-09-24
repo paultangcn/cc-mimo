@@ -76,6 +76,23 @@ CCMIMO_AGENTS="mimo-pro=mimo-v2.6-pro mimo-flash=mimo-v2.6-flash grok=grok-4.7"
 
 Web search for non-MiMo models goes through CLIProxyAPI as usual.
 
+## Checking your MiMo quota (optional)
+
+MiMo has no public quota API, but the platform console reads it from two endpoints you can call yourself with your console login cookie:
+
+- `GET https://platform.xiaomimimo.com/api/v1/tokenPlan/usage` — tokens used / limit (`data.usage.items[name=plan_total_token]`)
+- `GET https://platform.xiaomimimo.com/api/v1/tokenPlan/detail` — plan and `currentPeriodEnd`
+
+To get the cookie without digging through headers: open the console's Token Plan page in your browser, open the web inspector's Network tab, reload, and export the requests as a `.har` file. Then:
+
+```bash
+jq -r '[.log.entries[] | select(.request.url|test("tokenPlan/usage"))][0].request.headers[] | select(.name|test("^cookie$";"i")).value' platform.xiaomimimo.com.har > ~/.config/cc-mimo/mimo-console-cookie
+chmod 600 ~/.config/cc-mimo/mimo-console-cookie
+curl -s https://platform.xiaomimimo.com/api/v1/tokenPlan/usage -H "Cookie: $(cat ~/.config/cc-mimo/mimo-console-cookie)"
+```
+
+From there you can show it in a Claude Code `statusLine` script (cache the result; don't query on every render). The cookie is your Xiaomi account login: keep it private, delete the `.har` afterwards, and re-export when it expires. These are undocumented console endpoints and may change.
+
 ## Configuration
 
 `~/.config/cc-mimo/config.sh` (read by `ccmimo`, see [`examples/config.sh`](examples/config.sh)):
