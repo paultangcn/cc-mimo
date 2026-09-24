@@ -109,6 +109,8 @@ From there you can show it in a Claude Code `statusLine` script (cache the resul
 | `CCMIMO_CONTEXT_TOKENS` / `CCMIMO_COMPACT_PCT` | `500000` / `90` | |
 | `CCMIMO_CLAUDE_ARGS` | empty | Extra `claude` flags, e.g. `--dangerously-skip-permissions` |
 
+Any of these can be set for a single launch on the command line, which wins over the file: `CCMIMO_CONTEXT_TOKENS=200000 ccmimo flash`.
+
 `~/.config/cc-mimo/shim.json` (read by the shim, see [`examples/shim.json`](examples/shim.json)): listen port, CLIProxyAPI address and client key, and where the native web search goes — `fromCliProxyAPI` reuses the MiMo key from your CLIProxyAPI config so it lives in one place, or set `baseUrl` + `apiKey`/`apiKeyEnv`.
 
 ## How the shim works

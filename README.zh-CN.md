@@ -91,6 +91,8 @@ curl -s https://platform.xiaomimimo.com/api/v1/tokenPlan/usage -H "Cookie: $(cat
 
 `~/.config/cc-mimo/config.sh`（`ccmimo` 读取，见 [`examples/config.sh`](examples/config.sh)）：客户端 key、默认模型、简写、可点名的 agent、上下文长度和压缩比例、额外的 `claude` 参数（例如 `--dangerously-skip-permissions`）。
 
+这些设置都可以只对某一次启动生效，直接写在命令前面，优先于配置文件：`CCMIMO_CONTEXT_TOKENS=200000 ccmimo flash`。
+
 `~/.config/cc-mimo/shim.json`（shim 读取，见 [`examples/shim.json`](examples/shim.json)）：监听端口、CLIProxyAPI 地址和 key、联网搜索发往哪里。`fromCliProxyAPI` 会直接复用你 CLIProxyAPI 配置里的 MiMo key，key 只保存在一处。
 
 ## 注意

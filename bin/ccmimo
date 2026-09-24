@@ -11,7 +11,10 @@
 set -euo pipefail
 
 CONFIG="${CCMIMO_CONFIG:-$HOME/.config/cc-mimo/config.sh}"
+# Settings given on the command line (CCMIMO_X=... ccmimo) win over the config file.
+cli_settings=$(declare -px | grep '^declare -x CCMIMO_' || true)
 [ -f "$CONFIG" ] && . "$CONFIG"
+eval "$cli_settings"
 
 : "${CCMIMO_GATEWAY_URL:=http://127.0.0.1:8319}"      # cc-mimo-shim (in front of CLIProxyAPI)
 : "${CCMIMO_API_KEY:?set CCMIMO_API_KEY (a client key your CLIProxyAPI accepts) in $CONFIG}"
