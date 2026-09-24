@@ -1,0 +1,37 @@
+# Parts of a CLIProxyAPI config that matter for claudex. Merge into your own config;
+# CLIProxyAPI hot-reloads it.
+
+openai-compatibility:
+  - name: "xiaomi-mimo"
+    base-url: "https://api.xiaomimimo.com/v1"      # or your plan's endpoint
+    api-key-entries:
+      - api-key: "sk-your-mimo-key"
+    models:
+      - name: "mimo-v2.6-pro"
+        alias: "mimo-v2.6-pro"
+        # Keep the model's own reasoning across tool calls. Without this, CLIProxyAPI
+        # drops unsigned thinking blocks when converting Claude -> OpenAI, MiMo never
+        # sees its previous reasoning (reasoning_content), and it re-derives everything
+        # on every step: thinking grows turn after turn and each step takes minutes.
+        is-compat: true
+        thinking:
+          levels: ["low", "medium", "high"]
+      - name: "mimo-v2.6-flash"
+        alias: "mimo-v2.6-flash"
+        is-compat: true
+        thinking:
+          levels: ["low", "medium", "high"]
+
+# Optional fallback for clients that bypass claudex-shim: map Claude Code's web_search
+# server tool to MiMo's native web search. Works, but returns no source links;
+# claudex-shim handles search itself and does return them.
+payload:
+  override-raw:
+    - models:
+        - name: "mimo-*"
+          protocol: "openai"
+          from-protocol: "claude"
+          exist:
+            - 'tools.#(function.name=="web_search").type'
+      params:
+        "tools": '[{"type":"web_search"}]'
