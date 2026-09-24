@@ -45,7 +45,9 @@ agents_json=$(CCMIMO_AGENTS="$CCMIMO_AGENTS" node -e '
 
 # Subagents follow the session's model unless one is named — Claude Code's own default,
 # restated here so a user-level CLAUDE_CODE_SUBAGENT_MODEL (e.g. a Claude model) can't leak in.
-settings_json='{"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"inherit"}}'
+# claude.ai connectors need a claude.ai login, which a gateway session doesn't use;
+# turning them off also silences the "connectors are disabled" warning at startup.
+settings_json='{"disableClaudeAiConnectors":true,"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"inherit"}}'
 
 export ANTHROPIC_BASE_URL="$CCMIMO_GATEWAY_URL"
 export ANTHROPIC_AUTH_TOKEN="$CCMIMO_API_KEY"
