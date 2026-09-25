@@ -23,7 +23,7 @@ cc-mimo 只作用于用 `ccmimo` 启动的会话。你平时的 `claude` 会话�
 |---|---|---|
 | MiMo 越走越慢：思考量从 1 千字涨到 5 万字，一步 3–6 分钟 | 网关转格式时丢掉了 MiMo 之前的思考，它每一步都要从头再推一遍（小米要求工具调用时把 `reasoning_content` 传回去） | CLIProxyAPI 里给 MiMo 模型加 `is-compat: true` |
 | `WebSearch` 没结果，或只回一段 `<tool_call><function=web_search>…` 文字 | Claude Code 的联网搜索是 Anthropic 服务端工具，MiMo 执行不了 | **cc-mimo-shim** 改用 MiMo 自带的联网插件，把来源转成真正的搜索结果，带链接 |
-| 派子 agent 全部报 `400 unknown provider for model claude-…` | 有东西请求了网关里没有的 Claude 模型 | 子 agent 跟主会话用同一个模型（Claude Code 的默认规则，由 `ccmimo` 保证）；要用别的模型就**点名**对应的 agent；剩下请求 Claude 模型名的，由 shim 换回主会话的模型 |
+| 派子 agent 全部报 `400 unknown provider for model claude-…` | 有东西请求了网关里没有的 Claude 模型 | 子 agent 跟主会话用同一个模型（Claude Code 的默认规则，由 `ccmimo` 保证）；要用别的模型就**点名**对应的 agent；子 agent 或后台杂活请求的模型网关没有、或被上游拒绝（订阅到期、额度用完、故障），由 shim 换成主会话的模型；你自己在主会话选的模型不替换 |
 | 模型说自己没有 `TaskCreate` / `TaskList` | Claude Code 对它不认识的模型隐藏任务工具 | `ccmimo` 把它们打开 |
 | 提示 `… isn't described by this version's model catalog … within 200k tokens` | Claude Code 不知道模型的上下文长度 | `ccmimo` 设为 50 万，用到 90% 自动压缩（可改） |
 | 会话不再自动压缩，上下文一直涨过上限（状态栏 100%） | 用 `/model` 列表切到了 CLIProxyAPI 起的 `claude-…` 别名，Claude Code 对别名不执行我们设的上下文和压缩设置 | `ccmimo` 关掉网关模型发现；切模型用真名：`/model mimo-v2.6-flash` |
@@ -89,7 +89,7 @@ curl -s https://platform.xiaomimimo.com/api/v1/tokenPlan/usage -H "Cookie: $(cat
 
 ## 配置
 
-`~/.config/cc-mimo/config.sh`（`ccmimo` 读取，见 [`examples/config.sh`](examples/config.sh)）：客户端 key、默认模型、简写、可点名的 agent、上下文长度和压缩比例、各模型的默认思考档位、额外的 `claude` 参数（例如 `--dangerously-skip-permissions`）。
+`~/.config/cc-mimo/config.sh`（`ccmimo` 读取，见 [`examples/config.sh`](examples/config.sh)）：客户端 key、默认模型、简写、可点名的 agent、上下文长度和压缩比例、各模型的默认思考档位、`/model` 菜单里放哪些模型（`CCMIMO_PICKER`，按 opus / sonnet / haiku / fable / custom 五个位置；菜单里按 `s` 只切当前会话，按回车会连普通 `claude` 的默认模型一起改）、额外的 `claude` 参数（例如 `--dangerously-skip-permissions`）。
 
 这些设置都可以只对某一次启动生效，直接写在命令前面，优先于配置文件：`CCMIMO_CONTEXT_TOKENS=200000 ccmimo flash`。
 

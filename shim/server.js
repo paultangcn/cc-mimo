@@ -3,11 +3,13 @@
 // gateway (CLIProxyAPI) that serves non-Anthropic models.
 //
 // It fixes what breaks when Claude Code talks to such models:
-//  1. Subagents / Explore / background helpers ask for claude-* models the gateway
-//     does not serve. They are rewritten to the model the same session's main
-//     thread is using, so a Grok session spawns Grok subagents, a MiMo session
-//     spawns MiMo subagents. If the session's model is unknown, the request is
-//     refused instead of guessed.
+//  1. Subagents / Explore / background helpers (session titles etc.) may ask for a
+//     model the gateway does not serve (claude-* names, or a model whose
+//     subscription has lapsed), or the upstream may reject that model. Such
+//     requests are sent with the model the same session's main thread is using,
+//     so a Grok session spawns Grok subagents, a MiMo session spawns MiMo
+//     subagents. If the session's model is unknown, the request is refused
+//     instead of guessed. The main thread's own model is never swapped.
 //  2. Claude Code's server-side web_search tool only exists on Anthropic's API.
 //     For models whose provider has its own native web search (e.g. Xiaomi MiMo),
 //     the search is run on that provider and its citations are returned as real
@@ -98,6 +100,7 @@ async function refreshModels() {
     ]);
     const real = new Set((openai.data || []).map((m) => m.id));
     servedIds.clear(); aliasToReal.clear();
+    for (const id of real) servedIds.add(id);
     for (const m of anthropic.data || []) {
       servedIds.add(m.id);
       const guess = m.id.replace(/^claude-[a-z]+-\d+-dd-/, '').split('').reverse().join('');
@@ -209,8 +212,17 @@ async function handleSearch(res, rule, reqBody) {
 
 // ---------- proxy ----------
 
-function passthrough(req, res, body) {
+// retry: for helper requests, the session's main model to fall back to when the
+// upstream rejects the requested model (auth, quota, missing, outage).
+function passthrough(req, res, body, retry = null) {
   const up = http.request({ host: UPSTREAM.hostname, port: UPSTREAM.port, method: req.method, path: req.url, headers: req.headers }, (ur) => {
+    if (retry && ur.statusCode > 400 && ur.statusCode !== 413) {
+      ur.resume();
+      log('model', retry.from, 'upstream', ur.statusCode, '-> retry as', retry.to);
+      const swapped = Buffer.from(JSON.stringify({ ...retry.parsed, model: retry.to }));
+      req.headers['content-length'] = String(swapped.length);
+      return passthrough(req, res, swapped);
+    }
     res.writeHead(ur.statusCode, ur.headers);
     ur.pipe(res);
   });
@@ -238,7 +250,16 @@ async function handle(req, res, body) {
     'server_tools=' + tools.filter((t) => t.type && t.type !== 'custom').map((t) => t.type).join(',') + ' tools=' + tools.length,
     'effort=' + JSON.stringify(parsed.output_config?.effort || null));
 
-  if (/^claude-/i.test(parsed.model) && !servedIds.has(parsed.model)) {
+  // Helper = subagent, or a tool-less background call (title, summary). Main-thread
+  // requests always carry tools.
+  const helper = Boolean(agent) || tools.length === 0;
+  const unserved = servedIds.size ? !servedIds.has(parsed.model) : /^claude-/i.test(parsed.model);
+  if (unserved && !helper && !/^claude-/i.test(parsed.model)) {
+    log('model', parsed.model, 'REFUSED: not served by the gateway (main thread)');
+    return sendError(res, 400, 'invalid_request_error', `cc-mimo-shim: the gateway does not serve ${parsed.model}; switch with /model to one it serves`);
+  }
+  let retry = null;
+  if (unserved) {
     const to = sid && sessionModel.get(sid);
     if (!to) {
       log('model', parsed.model, 'REFUSED: session model unknown', sid || 'no-session');
@@ -248,8 +269,10 @@ async function handle(req, res, body) {
     parsed.model = to;
     body = Buffer.from(JSON.stringify(parsed));
     req.headers['content-length'] = String(body.length);
-  } else if (sid && !agent) {
+  } else if (sid && !helper) {
     rememberModel(sid, parsed.model);
+  } else if (sid && sessionModel.get(sid) && sessionModel.get(sid) !== parsed.model) {
+    retry = { from: parsed.model, to: sessionModel.get(sid), parsed };
   }
 
   if (!req.url.startsWith('/v1/messages/count_tokens') && tools.some(isWebSearchTool)) {
@@ -262,7 +285,7 @@ async function handle(req, res, body) {
       }
     }
   }
-  passthrough(req, res, body);
+  passthrough(req, res, body, retry);
 }
 
 http.createServer((req, res) => {

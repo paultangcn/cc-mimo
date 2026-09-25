@@ -27,6 +27,9 @@ eval "$cli_settings"
 : "${CCMIMO_CLAUDE_ARGS:=}"                            # e.g. --dangerously-skip-permissions
 # Default effort per model ("model=level ..."); /effort in the session still changes it.
 : "${CCMIMO_EFFORTS:=}"
+# Models shown in the /model menu: Claude Code's opus/sonnet/haiku/fable slots and one
+# custom slot ("slot=model ..."). Subagents that name a slot (e.g. model: haiku) use it too.
+: "${CCMIMO_PICKER:=opus=mimo-v2.6-pro sonnet=mimo-v2.6-flash}"
 
 model="$CCMIMO_DEFAULT_MODEL"
 if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
@@ -60,6 +63,18 @@ agents_json=$(CCMIMO_AGENTS="$CCMIMO_AGENTS" node -e '
 # claude.ai connectors need a claude.ai login, which a gateway session doesn't use;
 # turning them off also silences the "connectors are disabled" warning at startup.
 settings_json='{"disableClaudeAiConnectors":true,"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"inherit"}}'
+
+for pair in $CCMIMO_PICKER; do
+  slot="${pair%%=*}" id="${pair#*=}"
+  case "$slot" in
+    opus|sonnet|haiku|fable)
+      var="ANTHROPIC_DEFAULT_$(printf '%s' "$slot" | tr '[:lower:]' '[:upper:]')_MODEL"
+      export "$var=$id" "${var}_NAME=$id" "${var}_DESCRIPTION=via cc-mimo" ;;
+    custom)
+      export ANTHROPIC_CUSTOM_MODEL_OPTION="$id" ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="$id" ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="via cc-mimo" ;;
+    *) echo "ccmimo: unknown menu slot '$slot' in CCMIMO_PICKER (use opus, sonnet, haiku, fable, custom)" >&2 ;;
+  esac
+done
 
 export ANTHROPIC_BASE_URL="$CCMIMO_GATEWAY_URL"
 export ANTHROPIC_AUTH_TOKEN="$CCMIMO_API_KEY"
