@@ -214,16 +214,33 @@ async function handleSearch(res, rule, reqBody) {
 
 // retry: for helper requests, the session's main model to fall back to when the
 // upstream rejects the requested model (auth, quota, missing, outage).
-function passthrough(req, res, body, retry = null) {
+// timing: when set, log how long the upstream takes to answer (headers, first model
+// output, end), to decide a stall timeout from real numbers.
+function passthrough(req, res, body, retry = null, timing = null) {
+  const started = Date.now();
   const up = http.request({ host: UPSTREAM.hostname, port: UPSTREAM.port, method: req.method, path: req.url, headers: req.headers }, (ur) => {
     if (retry && ur.statusCode > 400 && ur.statusCode !== 413) {
       ur.resume();
       log('model', retry.from, 'upstream', ur.statusCode, '-> retry as', retry.to);
       const swapped = Buffer.from(JSON.stringify({ ...retry.parsed, model: retry.to }));
       req.headers['content-length'] = String(swapped.length);
-      return passthrough(req, res, swapped);
+      return passthrough(req, res, swapped, null, timing && { ...timing, model: retry.to });
     }
     res.writeHead(ur.statusCode, ur.headers);
+    if (timing) {
+      const headersMs = Date.now() - started;
+      let firstOutputMs = null;
+      ur.on('data', (chunk) => {
+        if (firstOutputMs === null && /content_block_delta|"content":\s*\[\s*\{/.test(chunk.toString('utf8'))) firstOutputMs = Date.now() - started;
+      });
+      let ended = false;
+      const report = (outcome) => log('timing', timing.model, timing.who, 'status=' + ur.statusCode, outcome,
+        'headers=' + headersMs + 'ms', 'firstOutput=' + (firstOutputMs === null ? '-' : firstOutputMs + 'ms'),
+        'total=' + (Date.now() - started) + 'ms', 'requestKB=' + Math.round(timing.bytes / 1024));
+      ur.on('end', () => { ended = true; report('done'); });
+      // Claude Code gave up on a request that never finished (the stall we want to measure).
+      res.on('close', () => { if (!ended) report('client-closed'); });
+    }
     ur.pipe(res);
   });
   up.on('error', (e) => { log('upstream error', e.message); if (!res.headersSent) res.writeHead(502); res.end(); });
@@ -285,7 +302,9 @@ async function handle(req, res, body) {
       }
     }
   }
-  passthrough(req, res, body, retry);
+  const timing = req.url.startsWith('/v1/messages/count_tokens') ? null
+    : { model: parsed.model, who: agent ? 'agent' : (tools.length ? 'main' : 'helper'), bytes: body.length };
+  passthrough(req, res, body, retry, timing);
 }
 
 http.createServer((req, res) => {
