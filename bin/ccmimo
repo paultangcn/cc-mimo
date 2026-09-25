@@ -25,6 +25,8 @@ eval "$cli_settings"
 : "${CCMIMO_CONTEXT_TOKENS:=500000}"
 : "${CCMIMO_COMPACT_PCT:=90}"
 : "${CCMIMO_CLAUDE_ARGS:=}"                            # e.g. --dangerously-skip-permissions
+# Default effort per model ("model=level ..."); /effort in the session still changes it.
+: "${CCMIMO_EFFORTS:=}"
 
 model="$CCMIMO_DEFAULT_MODEL"
 if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
@@ -33,6 +35,13 @@ if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
     [ "${pair%%=*}" = "$model" ] && model="${pair#*=}" && break
   done
 fi
+
+effort_args=()
+case " $* " in *" --effort "*|*" --effort="*) ;; *)
+  for pair in $CCMIMO_EFFORTS; do
+    [ "${pair%%=*}" = "$model" ] && effort_args=(--effort "${pair#*=}") && break
+  done
+esac
 
 agents_json=$(CCMIMO_AGENTS="$CCMIMO_AGENTS" node -e '
   const agents = {};
@@ -64,4 +73,4 @@ export CLAUDE_CODE_ENABLE_TODO_TOOLS=1   # TaskCreate/TaskList/TaskUpdate are hi
 unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS  # breaks cross-session SendMessage for these models
 
 # shellcheck disable=SC2086
-exec claude --model "$model" --settings "$settings_json" --agents "$agents_json" $CCMIMO_CLAUDE_ARGS "$@"
+exec claude --model "$model" --settings "$settings_json" --agents "$agents_json" ${effort_args[@]+"${effort_args[@]}"} $CCMIMO_CLAUDE_ARGS "$@"

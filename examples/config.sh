@@ -17,6 +17,10 @@ CCMIMO_AGENTS="mimo-pro=mimo-v2.6-pro mimo-flash=mimo-v2.6-flash"
 CCMIMO_CONTEXT_TOKENS=500000
 CCMIMO_COMPACT_PCT=90
 
+# Default effort for particular models ("model=level", levels: low medium high xhigh max).
+# Only models whose provider honors effort are worth listing (GPT does; MiMo ignores it).
+# CCMIMO_EFFORTS="gpt-6-astra=medium gpt-6-luna=max"
+
 # Extra flags passed to `claude` on every launch, e.g. --dangerously-skip-permissions
 CCMIMO_CLAUDE_ARGS=""
 

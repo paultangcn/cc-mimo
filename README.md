@@ -107,6 +107,7 @@ From there you can show it in a Claude Code `statusLine` script (cache the resul
 | `CCMIMO_SHORTCUTS` | `pro=… flash=…` | `ccmimo <shortcut>` |
 | `CCMIMO_AGENTS` | `mimo-pro=… mimo-flash=…` | Agents callable by name, `name=model` |
 | `CCMIMO_CONTEXT_TOKENS` / `CCMIMO_COMPACT_PCT` | `500000` / `90` | |
+| `CCMIMO_EFFORTS` | empty | Default effort per model, `model=level` (`/effort` still changes it) |
 | `CCMIMO_CLAUDE_ARGS` | empty | Extra `claude` flags, e.g. `--dangerously-skip-permissions` |
 
 Any of these can be set for a single launch on the command line, which wins over the file: `CCMIMO_CONTEXT_TOKENS=200000 ccmimo flash`.
