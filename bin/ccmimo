@@ -27,9 +27,6 @@ eval "$cli_settings"
 : "${CCMIMO_CLAUDE_ARGS:=}"                            # e.g. --dangerously-skip-permissions
 # Default effort per model ("model=level ..."); /effort in the session still changes it.
 : "${CCMIMO_EFFORTS:=}"
-# Models shown in the /model menu: Claude Code's opus/sonnet/haiku/fable slots and one
-# custom slot ("slot=model ..."). Subagents that name a slot (e.g. model: haiku) use it too.
-: "${CCMIMO_PICKER:=opus=mimo-v2.6-pro sonnet=mimo-v2.6-flash}"
 
 model="$CCMIMO_DEFAULT_MODEL"
 if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
@@ -64,18 +61,6 @@ agents_json=$(CCMIMO_AGENTS="$CCMIMO_AGENTS" node -e '
 # turning them off also silences the "connectors are disabled" warning at startup.
 settings_json='{"disableClaudeAiConnectors":true,"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"inherit"}}'
 
-for pair in $CCMIMO_PICKER; do
-  slot="${pair%%=*}" id="${pair#*=}"
-  case "$slot" in
-    opus|sonnet|haiku|fable)
-      var="ANTHROPIC_DEFAULT_$(printf '%s' "$slot" | tr '[:lower:]' '[:upper:]')_MODEL"
-      export "$var=$id" "${var}_NAME=$id" "${var}_DESCRIPTION=via cc-mimo" ;;
-    custom)
-      export ANTHROPIC_CUSTOM_MODEL_OPTION="$id" ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="$id" ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="via cc-mimo" ;;
-    *) echo "ccmimo: unknown menu slot '$slot' in CCMIMO_PICKER (use opus, sonnet, haiku, fable, custom)" >&2 ;;
-  esac
-done
-
 export ANTHROPIC_BASE_URL="$CCMIMO_GATEWAY_URL"
 export ANTHROPIC_AUTH_TOKEN="$CCMIMO_API_KEY"
 # No gateway model discovery: CLIProxyAPI lists models under claude-… aliases, and a
@@ -87,29 +72,5 @@ export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE="$CCMIMO_COMPACT_PCT"
 export CLAUDE_CODE_ENABLE_TODO_TOOLS=1   # TaskCreate/TaskList/TaskUpdate are hidden for models Claude Code doesn't recognize
 unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS  # breaks cross-session SendMessage for these models
 
-# Pressing Enter in the /model menu saves the pick as the default of plain `claude`
-# too (a slot name like "sonnet", or the custom model's id). Put the previous default
-# back on exit when it was changed to something only this menu offers.
-user_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
-default_model() { [ -f "$user_settings" ] && node -e 'try{const m=require(process.argv[1]).model;process.stdout.write(m===undefined?"<unset>":String(m))}catch{process.stdout.write("<unreadable>")}' "$user_settings"; }
-restore_default() {
-  local now; now=$(default_model)
-  [ "$now" = "$saved_default" ] && return
-  case " opus sonnet haiku fable $(for pair in $CCMIMO_PICKER; do printf '%s ' "${pair#*=}"; done)" in
-    *" $now "*) ;;
-    *) return ;;
-  esac
-  SAVED="$saved_default" node -e '
-    const fs = require("fs"), file = process.argv[1];
-    const settings = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (process.env.SAVED === "<unset>") delete settings.model; else settings.model = process.env.SAVED;
-    fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");' "$user_settings" \
-    && echo "ccmimo: restored the default model of plain claude to ${saved_default}" >&2
-}
-saved_default=$(default_model)
-
 # shellcheck disable=SC2086
-claude --model "$model" --settings "$settings_json" --agents "$agents_json" ${effort_args[@]+"${effort_args[@]}"} $CCMIMO_CLAUDE_ARGS "$@"
-status=$?
-case "$saved_default" in "<unreadable>"|"") ;; *) restore_default ;; esac
-exit $status
+exec claude --model "$model" --settings "$settings_json" --agents "$agents_json" ${effort_args[@]+"${effort_args[@]}"} $CCMIMO_CLAUDE_ARGS "$@"

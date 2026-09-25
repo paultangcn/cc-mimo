@@ -107,7 +107,6 @@ From there you can show it in a Claude Code `statusLine` script (cache the resul
 | `CCMIMO_SHORTCUTS` | `pro=… flash=…` | `ccmimo <shortcut>` |
 | `CCMIMO_AGENTS` | `mimo-pro=… mimo-flash=…` | Agents callable by name, `name=model` |
 | `CCMIMO_CONTEXT_TOKENS` / `CCMIMO_COMPACT_PCT` | `500000` / `90` | |
-| `CCMIMO_PICKER` | `opus=mimo-v2.6-pro sonnet=mimo-v2.6-flash` | Models in the `/model` menu by slot: `opus`, `sonnet`, `haiku`, `fable`, `custom`. Subagents and background helpers that name a slot use it too. In the menu press `s` to switch this session only; `Enter` also changes the default of plain `claude` |
 | `CCMIMO_EFFORTS` | empty | Default effort per model, `model=level` (`/effort` still changes it) |
 | `CCMIMO_CLAUDE_ARGS` | empty | Extra `claude` flags, e.g. `--dangerously-skip-permissions` |
 
@@ -118,7 +117,7 @@ Any of these can be set for a single launch on the command line, which wins over
 ## How the shim works
 
 - **Web search.** A request carrying Claude Code's `web_search_*` tool for a MiMo model is answered by the shim: one call to MiMo with `tools: [{"type":"web_search"}]`, its `url_citation` annotations turned into `web_search_tool_result` blocks (streamed or not).
-- **Models a helper can't get.** When a subagent or a background helper (session title, summary) asks for a model the gateway doesn't serve — a `claude-*` name, or one whose subscription lapsed — or the upstream rejects that model (auth, quota, missing, outage), the request is sent with the model the same session's main thread is using (Claude Code's `x-claude-code-session-id` header; remembered across restarts). If the session is unknown, the request is refused — never silently routed to a different model. The main thread's own model is never swapped: picking a model the gateway doesn't serve gets a clear error.
+- **Models a helper can't get.** When a subagent or a background helper (session title, summary) asks for a model the gateway doesn't serve — a `claude-*` name, or one whose subscription lapsed — or the upstream rejects that model (auth, quota, missing, outage), the request is sent with the model the same session's main thread is using (Claude Code's `x-claude-code-session-id` header; remembered across restarts). If the session is unknown, the request is refused — never silently routed to a different model. A main-thread request for a non-Claude model the gateway doesn't serve gets a clear error.
 - **Everything else** is forwarded byte for byte. One log line per request (model, main/subagent, server tools, effort) so you can see which layer misbehaves.
 
 ## Caveats

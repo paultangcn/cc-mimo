@@ -21,10 +21,6 @@ CCMIMO_COMPACT_PCT=90
 # Only models whose provider honors effort are worth listing (GPT does; MiMo ignores it).
 # CCMIMO_EFFORTS="gpt-6-astra=medium gpt-6-luna=max"
 
-# Models in the /model menu, by Claude Code slot (opus, sonnet, haiku, fable, custom).
-# Background helpers (session titles) and subagents that name a slot use these too.
-# CCMIMO_PICKER="opus=mimo-v2.6-pro sonnet=mimo-v2.6-flash haiku=gpt-6-luna fable=gpt-6-astra custom=grok-4.7"
-
 # Extra flags passed to `claude` on every launch, e.g. --dangerously-skip-permissions
 CCMIMO_CLAUDE_ARGS=""
 
