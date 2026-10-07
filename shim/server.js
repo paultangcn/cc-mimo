@@ -4,8 +4,8 @@
 //
 // It fixes what breaks when Claude Code talks to such models:
 //  1. Subagents / Explore / background helpers (session titles etc.) may ask for a
-//     model the gateway does not serve (claude-* names, or a model whose
-//     subscription has lapsed), or the upstream may reject that model. Such
+//     model the gateway does not serve (claude-* names), or the upstream may reject
+//     the model they name (e.g. its subscription lapsed). Such
 //     requests are sent with the model the same session's main thread is using,
 //     so a Grok session spawns Grok subagents, a MiMo session spawns MiMo
 //     subagents. If the session's model is unknown, the request is refused
@@ -270,11 +270,11 @@ async function handle(req, res, body) {
   // Helper = subagent, or a tool-less background call (title, summary). Main-thread
   // requests always carry tools.
   const helper = Boolean(agent) || tools.length === 0;
-  const unserved = servedIds.size ? !servedIds.has(parsed.model) : /^claude-/i.test(parsed.model);
-  if (unserved && !helper && !/^claude-/i.test(parsed.model)) {
-    log('model', parsed.model, 'REFUSED: not served by the gateway (main thread)');
-    return sendError(res, 400, 'invalid_request_error', `cc-mimo-shim: the gateway does not serve ${parsed.model}; switch with /model to one it serves`);
-  }
+  // Only claude-* names are swapped up front. Any other model goes to the gateway as is:
+  // the gateway's /v1/models list comes and goes (grok-4.7 drops out of it while still
+  // answering), so a missing entry is not proof the model is unusable. If the gateway
+  // really rejects a helper's model, passthrough retries it with the session model.
+  const unserved = /^claude-/i.test(parsed.model) && !servedIds.has(parsed.model);
   let retry = null;
   if (unserved) {
     const to = sid && sessionModel.get(sid);
